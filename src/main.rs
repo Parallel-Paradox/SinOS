@@ -1,3 +1,5 @@
+mod service;
+
 use std::net::SocketAddr;
 use axum::response::Html;
 use axum::Router;
@@ -11,14 +13,14 @@ async fn main() {
         .with_max_level(Level::DEBUG)
         .finish();
     tracing::subscriber::set_global_default(subscriber)
-        .expect("setting default subscriber failed");
+        .expect("Setting default subscriber failed.");
 
     // build application with route
     let app = Router::new().route("/", get(index));
 
     // run app with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::debug!("listening on {}", addr);
+    tracing::debug!("Listening on {} ...", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await.unwrap();
