@@ -1,6 +1,7 @@
 mod service;
 
 use std::net::SocketAddr;
+use tokio::time::{sleep, Duration};
 use axum::response::Html;
 use axum::Router;
 use axum::routing::get;
@@ -17,6 +18,12 @@ async fn main() {
 
     // build application with route
     let app = Router::new().route("/", get(index));
+
+    tokio::spawn(async move {
+        let sender = service::action_code::test_send().await;
+        sleep(Duration::from_secs(10)).await;
+        sender.unwrap().send(service::action_code::Command::HelloWorld).await.unwrap();
+    });
 
     // run app with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
