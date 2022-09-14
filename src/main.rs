@@ -2,12 +2,15 @@ mod service;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::RwLock;
 use axum::extract::Path;
 use axum::response::Html;
-use axum::Router;
+use axum::{Extension, Router};
 use axum::routing::get;
+use tokio::sync::mpsc;
 use tracing::Level;
+
+use crate::service::admin::{Admin, AdminExt, AdminMsg};
+use crate::service::ServiceMsg::CloseService;
 
 #[tokio::main]
 async fn main() {
@@ -30,26 +33,17 @@ async fn main() {
 
 async fn index() -> Html<&'static str> { Html(include_str!("../dist/index.html")) }
 
-#[derive(Debug)]
-struct Test { num: i32 }
-
-async fn get_user(Path(user_id): Path<String>, state: Arc<RwLock<Test>>) {
-    let mut x = state.write().unwrap();
-    x.num +=1 ;
-    println!("{user_id} {x:?}");
+async fn get_user(Path(user_id): Path<String>, Extension(sender): AdminExt) {
+    println!("{user_id}");
+    sender.clone().send(CloseService).await.unwrap();
 }
 
 fn test_shared_state() -> Router {
-    let shared_state = Arc::new(RwLock::new(Test { num: 5 }));
+    let shared_state = Arc::new(Admin::start(32));
 
     // build application with route
     Router::new()
         .route("/", get(index))
-        .route(
-            "/users/:id",
-            get({
-                let shared_state = Arc::clone(&shared_state);
-                move |path| get_user(path, shared_state)
-            })
-        )
+        .route("/users/:id", get(get_user))
+        .layer(Extension(shared_state))
 }

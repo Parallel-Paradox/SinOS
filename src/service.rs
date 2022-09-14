@@ -2,6 +2,7 @@ pub mod action_code;
 pub mod admin;
 
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -11,7 +12,7 @@ use tokio::sync::oneshot;
 pub trait ServiceManager
     <E: ServiceContext, C: ServiceCommand, R: ServiceResponse>: Debug + Send + Default
 {
-    fn msg_handler(&self, context: &mut E, msg: ServiceMsg<C, R>);
+    fn cmd_handler(&self, context: &mut E, command: CustomCommand<C, R>);
 }
 
 /// The context that manager works on.
@@ -27,26 +28,38 @@ pub trait ServiceResponse: Debug + Send { }
 /* ---------- Define ---------- */
 
 #[derive(Debug)]
-pub struct Service
-    <T: ServiceManager<E, C, R>, E: ServiceContext, C: ServiceCommand, R: ServiceResponse>
+pub struct Service<T, E, C, R> where
+    T: ServiceManager<E, C, R>,
+    E: ServiceContext,
+    C: ServiceCommand + 'static,
+    R: ServiceResponse + 'static,
 {
     manager: T,
     context: E,
-    /// [`None`] if service is not started. Remember to drop it if you borrowed one.
-    msg_sender: Option<mpsc::Sender<ServiceMsg<C, R>>>,
+    phant_c: PhantomData<C>,
+    phant_r: PhantomData<R>,
 }
 
 impl<T, E, C, R> Default for Service<T, E, C, R> where
     T: ServiceManager<E, C, R>, E: ServiceContext, C: ServiceCommand, R: ServiceResponse
 {
-    fn default() -> Self { Self { manager: T::default(), context: E::default(), msg_sender: None } }
+    fn default() -> Self {
+        Self {
+            manager: T::default(), context: E::default(),
+            phant_c: PhantomData, phant_r: PhantomData,
+        }
+    }
 }
 
+#[derive(Debug)]
+pub struct CustomCommand<C:ServiceCommand, R: ServiceResponse> {
+    command: C,
+    rsp_sender: Option<oneshot::Sender<R>>,
+}
 
 #[derive(Debug)]
-pub struct ServiceMsg<C: ServiceCommand, R: ServiceResponse> {
-    command: C,
-    rsp_sender: oneshot::Sender<R>,
+pub enum ServiceMsg<C:ServiceCommand, R: ServiceResponse> {
+    Do(CustomCommand<C, R>), CloseService,
 }
 
 
@@ -56,19 +69,21 @@ impl<T, E, C, R> Service<T, E, C, R> where
     T: ServiceManager<E, C, R>,
     E: ServiceContext,
     C: ServiceCommand + 'static,
-    R: ServiceResponse + 'static
+    R: ServiceResponse + 'static,
 {
-    fn start(buffer: usize) -> mpsc::Sender<ServiceMsg<C, R>> {
-        let (sender, mut channel)
-            = mpsc::channel(buffer);
+    pub fn start(buffer: usize) -> mpsc::Sender<ServiceMsg<C, R>> {
+        let (sender, mut channel) = mpsc::channel(buffer);
         let _sender = sender.clone();
 
         tokio::spawn(async move {
             let mut service = Self::default();
-            service.msg_sender = Some(sender);
 
             while let Some(msg) = channel.recv().await {
-                println!("{:?}, {:?}", msg, service);
+                match msg {
+                    ServiceMsg::CloseService => break ,
+                    ServiceMsg::Do(command) =>
+                        service.manager.cmd_handler(&mut service.context, command),
+                }
             }
         });
 
