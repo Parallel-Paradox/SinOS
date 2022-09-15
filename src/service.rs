@@ -1,4 +1,5 @@
 pub mod admin;
+mod action_code;
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -12,7 +13,7 @@ use tokio::sync::oneshot;
 pub trait ServiceManager
     <E: ServiceContext, C: ServiceCommand, R: ServiceResponse>: Debug + Send + Default
 {
-    fn cmd_handler(&self, context: &mut E, command: C) -> R;
+    fn cmd_handler(&self, context: &mut E, command: CustomCommand<C, R>);
 }
 
 /// The context that manager works on.
@@ -57,9 +58,11 @@ pub struct CustomCommand<C:ServiceCommand, R: ServiceResponse> {
     pub rsp_sender: Option<oneshot::Sender<R>>,
 }
 
+// TODO: Add 'Pause' and 'ForceClose' command
+//  'ForceClose': Close service channel immediately, even there's still sender exist.
 #[derive(Debug)]
 pub enum ServiceMsg<C:ServiceCommand, R: ServiceResponse> {
-    Do(CustomCommand<C, R>), CloseService,
+    Do(CustomCommand<C, R>),
 }
 
 
@@ -82,7 +85,6 @@ impl<T, E, C, R> Service<T, E, C, R> where
             while let Some(msg) = channel.recv().await {
                 match msg {
                     ServiceMsg::Do(command) => service.handle_msg(command),
-                    ServiceMsg::CloseService => break,
                 }
             }
         });
@@ -91,13 +93,7 @@ impl<T, E, C, R> Service<T, E, C, R> where
     }
 
     fn handle_msg(&mut self, command: CustomCommand<C, R>) {
-        let rsp = self.manager.cmd_handler(&mut self.context, command.command);
-        if let None = command.rsp_sender { return }
-
-        match command.rsp_sender.unwrap().send(rsp) {
-            Err(err) => tracing::error!("{err:?}"),
-            Ok(_) => { }
-        }
+        self.manager.cmd_handler(&mut self.context, command);
     }
 }
 
@@ -106,6 +102,27 @@ impl<C, R> ServiceMsg<C, R> where C:ServiceCommand, R: ServiceResponse {
         match sender.send(self).await {
             Err(err) => tracing::error!("{err:?}"),
             Ok(_) => { },
+        }
+    }
+}
+
+pub fn send_response<R>(response: Option<R>, rsp_sender: Option<oneshot::Sender<R>>) where
+    R: ServiceResponse
+{
+    if let Some(rsp_sender) = rsp_sender {
+        if let Some(rsp) = response {
+            // send rsp
+            if let Err(err) = rsp_sender.send(rsp) {
+                tracing::error!("Response {err:?} send fail!");
+            }
+        } else {
+            // drop the sender and warn
+            tracing::warn!("Send a receiver but no response is generated.");
+        }
+    } else {
+        if let Some(_) = response {
+            // drop the rsp and warn
+            tracing::warn!("Generate a response but no receiver.");
         }
     }
 }
