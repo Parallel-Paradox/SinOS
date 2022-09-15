@@ -1,8 +1,8 @@
-pub mod action_code;
 pub mod admin;
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -12,7 +12,7 @@ use tokio::sync::oneshot;
 pub trait ServiceManager
     <E: ServiceContext, C: ServiceCommand, R: ServiceResponse>: Debug + Send + Default
 {
-    fn cmd_handler(&self, context: &mut E, command: CustomCommand<C, R>);
+    fn cmd_handler(&self, context: &mut E, command: C) -> R;
 }
 
 /// The context that manager works on.
@@ -46,15 +46,15 @@ impl<T, E, C, R> Default for Service<T, E, C, R> where
     fn default() -> Self {
         Self {
             manager: T::default(), context: E::default(),
-            phant_c: PhantomData, phant_r: PhantomData,
+            phant_c: PhantomData, phant_r: PhantomData
         }
     }
 }
 
 #[derive(Debug)]
 pub struct CustomCommand<C:ServiceCommand, R: ServiceResponse> {
-    command: C,
-    rsp_sender: Option<oneshot::Sender<R>>,
+    pub command: C,
+    pub rsp_sender: Option<oneshot::Sender<R>>,
 }
 
 #[derive(Debug)]
@@ -72,7 +72,8 @@ impl<T, E, C, R> Service<T, E, C, R> where
     R: ServiceResponse + 'static,
 {
     pub fn start(buffer: usize) -> mpsc::Sender<ServiceMsg<C, R>> {
-        let (sender, mut channel) = mpsc::channel(buffer);
+        let (sender, mut channel) =
+            mpsc::channel(buffer);
         let _sender = sender.clone();
 
         tokio::spawn(async move {
@@ -80,13 +81,31 @@ impl<T, E, C, R> Service<T, E, C, R> where
 
             while let Some(msg) = channel.recv().await {
                 match msg {
-                    ServiceMsg::CloseService => break ,
-                    ServiceMsg::Do(command) =>
-                        service.manager.cmd_handler(&mut service.context, command),
+                    ServiceMsg::Do(command) => service.handle_msg(command),
+                    ServiceMsg::CloseService => break,
                 }
             }
         });
 
         _sender
+    }
+
+    fn handle_msg(&mut self, command: CustomCommand<C, R>) {
+        let rsp = self.manager.cmd_handler(&mut self.context, command.command);
+        if let None = command.rsp_sender { return }
+
+        match command.rsp_sender.unwrap().send(rsp) {
+            Err(err) => tracing::error!("{err:?}"),
+            Ok(_) => { }
+        }
+    }
+}
+
+impl<C, R> ServiceMsg<C, R> where C:ServiceCommand, R: ServiceResponse {
+    pub async fn send(self, sender: Arc<mpsc::Sender<Self>>) {
+        match sender.send(self).await {
+            Err(err) => tracing::error!("{err:?}"),
+            Ok(_) => { },
+        }
     }
 }

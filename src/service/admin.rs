@@ -4,7 +4,10 @@
 //!
 //! Admin holds a map of <service_id, service_msg_sender>. Send the target service id and the
 //! message to admin, admin will redirect it to the right place.
+//!
+//! An Admin service can hold a sub admin.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use axum::Extension;
 use crate::service::*;
@@ -18,19 +21,27 @@ pub type AdminExt = Extension<Arc<mpsc::Sender<AdminMsg>>>;
 #[derive(Debug, Default)]
 pub struct Manager { }
 impl ServiceManager<Context, Command, Response> for Manager {
-    fn cmd_handler(&self, context: &mut Context, command: AdminCmd) {
-        println!("{context:?} {command:?}");
+    fn cmd_handler(&self, context: &mut Context, command: Command) -> Response {
+        tracing::debug!("{context:?} {command:?}");
+        Response::OK
     }
 }
 
 #[derive(Debug, Default)]
-pub struct Context { }
+pub struct Context {
+    sender_map: HashMap<String, ServiceSender>
+}
 impl ServiceContext for Context { }
 
 #[derive(Debug)]
-pub enum Command { }
+pub enum Command { Echo }
 impl ServiceCommand for Command { }
 
 #[derive(Debug)]
-pub enum Response { }
+pub enum Response { OK }
 impl ServiceResponse for Response { }
+
+#[derive(Debug)]
+enum ServiceSender {
+    Admin(Arc<mpsc::Sender<AdminMsg>>)
+}

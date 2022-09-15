@@ -1,16 +1,16 @@
 mod service;
+mod constant;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use axum::extract::Path;
 use axum::response::Html;
 use axum::{Extension, Router};
 use axum::routing::get;
-use tokio::sync::mpsc;
 use tracing::Level;
 
-use crate::service::admin::{Admin, AdminExt, AdminMsg};
-use crate::service::ServiceMsg::CloseService;
+use crate::service::admin;
+use crate::service::admin::{Admin, AdminCmd, AdminExt, AdminMsg};
+use crate::constant::*;
 
 #[tokio::main]
 async fn main() {
@@ -21,7 +21,8 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber)
         .expect("Setting default subscriber failed.");
 
-    let app = test_shared_state();
+    // build application with router
+    let app = create_app();
 
     // run app with hyper
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -33,17 +34,19 @@ async fn main() {
 
 async fn index() -> Html<&'static str> { Html(include_str!("../dist/index.html")) }
 
-async fn get_user(Path(user_id): Path<String>, Extension(sender): AdminExt) {
-    println!("{user_id}");
-    sender.clone().send(CloseService).await.unwrap();
+async fn echo(Extension(sender): AdminExt) {
+    AdminMsg::Do(
+        AdminCmd { command: admin::Command::Echo, rsp_sender: None }
+    ).send(sender).await;
 }
 
-fn test_shared_state() -> Router {
-    let shared_state = Arc::new(Admin::start(32));
+fn create_app() -> Router {
+    // start admin service
+    let shared_state =
+        Arc::new(Admin::start(ADMIN_BUFFER_SIZE));
 
-    // build application with route
     Router::new()
         .route("/", get(index))
-        .route("/users/:id", get(get_user))
+        .route("/echo", get(echo))
         .layer(Extension(shared_state))
 }
