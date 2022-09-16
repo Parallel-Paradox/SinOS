@@ -1,16 +1,11 @@
-mod service;
+mod action_code;
 mod constant;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 use axum::response::Html;
-use axum::{Extension, Router};
+use axum::Router;
 use axum::routing::get;
 use tracing::Level;
-
-use crate::service::admin;
-use crate::service::admin::{Admin, AdminCmd, AdminExt, AdminMsg};
-use crate::constant::*;
 
 #[tokio::main]
 async fn main() {
@@ -18,8 +13,7 @@ async fn main() {
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(Level::DEBUG)
         .finish();
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Setting default subscriber failed.");
+    tracing::subscriber::set_global_default(subscriber).expect("Set default subscriber");
 
     // build application with router
     let app = create_app();
@@ -32,21 +26,13 @@ async fn main() {
         .await.unwrap();
 }
 
-async fn index() -> Html<&'static str> { Html(include_str!("../dist/index.html")) }
-
-async fn echo(Extension(sender): AdminExt) {
-    AdminMsg::Do(
-        AdminCmd { command: admin::Command::Echo, rsp_sender: None }
-    ).send(sender).await;
-}
-
 fn create_app() -> Router {
-    // start admin service
-    let shared_state =
-        Arc::new(Admin::start(ADMIN_BUFFER_SIZE));
+    let mut app = Router::new();
+    app = app.route("/", get(index));
 
-    Router::new()
-        .route("/", get(index))
-        .route("/echo", get(echo))
-        .layer(Extension(shared_state))
+    app = action_code::register(app);
+
+    app
 }
+
+async fn index() -> Html<&'static str> { Html(include_str!("../dist/index.html")) }
