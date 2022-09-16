@@ -27,12 +27,9 @@ async fn main() {
 }
 
 fn create_app() -> Router {
-    let mut app = Router::new();
-    app = app.route("/", get(index));
-
-    app = action_code::register(app);
-
-    app
+    Router::new()
+        .route("/", get(index))
+        .nest("/action_code", action_code::create_app())
 }
 
 async fn index() -> Html<&'static str> { Html(include_str!("../dist/index.html")) }

@@ -1,44 +1,30 @@
+use std::sync::Arc;
 use axum::extract::WebSocketUpgrade;
 use axum::{Router, TypedHeader};
 use axum::extract::ws::{Message, WebSocket};
 use axum::response::IntoResponse;
 use axum::routing::get;
+use nanoid::nanoid;
+use parking_lot::RwLock;
+use crate::constant::NUM_ALPHABET;
 
-pub fn register(app: Router) -> Router {
-    app.route("/ws/connect", get(ws_connect))
+pub fn create_app() -> Router {
+    Router::new()
+        .route("/new_game_room", get(new_game_room))
 }
 
-async fn ws_connect(
-    ws: WebSocketUpgrade, user_agent: Option<TypedHeader<headers::UserAgent>>,
-) -> impl IntoResponse {
-    // ----- on connect -----
-    if let Some(TypedHeader(user_agent)) = user_agent {
-        tracing::debug!("'{}' connected", user_agent.as_str());
-    }
+type GameRoomVec = RwLock<Vec<RwLock<GameRoom>>>;
 
-    ws.on_upgrade(handle_socket)
+fn new_async_vec<T>() -> RwLock<Vec<RwLock<T>>> { RwLock::new(Vec::new()) }
+
+#[derive(Debug)]
+struct GameRoom {
+    pub room_id: String,
+    pub owner_id: String,
+    pub player_id_arr: Vec<String>,
 }
 
-async fn handle_socket(mut socket: WebSocket) {
-    while let Some(msg) = socket.recv().await {
-        if let Ok(msg) = msg {
-            tracing::debug!("Client says: {:?}", msg);
-            // ----- on close -----
-            if let Message::Close(_) = msg {
-                println!("-------");
-                break;
-            }
-            // ----- on upgrade -----
-            if socket
-                .send(Message::Text(format!("{:?}", msg))).await
-                .is_err()
-            {
-                tracing::warn!("Client disconnected with message '{:?}' dropped!", msg);
-                return;
-            }
-        } else {
-            tracing::debug!("Client disconnected.");
-            return;
-        }
-    }
+async fn new_game_room() -> impl IntoResponse {
+    let room_id = nanoid!(7, &NUM_ALPHABET);
+    let owner_id = nanoid!();
 }
