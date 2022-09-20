@@ -12,13 +12,14 @@ This project is a little demo that builds a game server with rust, using
 
 See more in Cargo.toml
 
-## Build on macOS
+## Build
 
 ### Database service
 
 **Start database service.** If you have started before, just ignore.
 
 ```shell
+# on macOS
 brew services start mongodb-community@6.0
 brew services start redis
 ```
@@ -31,6 +32,7 @@ configuration in constant.rs.
 If you want to close service, run:
 
 ```shell
+# on macOS
 brew services stop mongodb-community@6.0
 brew services stop redis
 ```
