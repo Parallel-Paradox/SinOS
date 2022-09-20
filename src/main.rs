@@ -6,6 +6,7 @@ use axum::response::Html;
 use axum::Router;
 use axum::routing::get;
 use tracing::Level;
+use crate::constant::SERVER_ADDR;
 
 #[tokio::main]
 async fn main() {
@@ -19,7 +20,7 @@ async fn main() {
     let app = create_app();
 
     // run app with hyper
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(SERVER_ADDR);
     tracing::debug!("Listening on {addr} ...");
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
