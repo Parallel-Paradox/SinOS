@@ -1,41 +1,29 @@
+mod game_room;
+pub use game_room::*;
+
 use axum::{Json, Router};
 use axum::response::IntoResponse;
 use axum::routing::get;
-use serde::{Serialize, Deserialize};
-
-mod room_id {
-    use nanoid::nanoid;
-    use serde::{Serialize, Deserialize};
-    use crate::constant::NUM_ALPHABET;
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct RoomID(String);
-
-    impl RoomID {
-        pub fn new() -> Self { RoomID::default() }
-        pub fn get(&self) -> &str { &self.0 }
-    }
-    
-    impl Default for RoomID {
-        fn default() -> Self { Self(nanoid!(7, &NUM_ALPHABET)) }
-    }
-}
-pub use room_id::*;
+use mongodb::Client;
+use mongodb::options::{ClientOptions, Credential};
+use crate::constant::MONGO_CREDENTIAL_ACTION_CODE;
 
 pub fn create_app() -> Router {
     Router::new()
         .route("/new_game_room", get(new_game_room))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct GameRoom {
-    pub room_id: RoomID,
+pub async fn create_mongo_client() -> Client {
+    let mut client_option = ClientOptions::default();
+    client_option.app_name = Some("ActionCode".into());
+    client_option.credential = Some(MONGO_CREDENTIAL_ACTION_CODE.unwrap());
+
+    Client::with_options(client_option).unwrap()
 }
 
 async fn new_game_room() -> impl IntoResponse {
-    let room_id = RoomID::new();
-    let game_room = GameRoom { room_id };
-    println!("{}", game_room.room_id.get());
+    let game_room = GameRoom::default();
+    println!("{:?}", game_room);
 
     Json(game_room)
 }
