@@ -1,12 +1,12 @@
 mod action_code;
-mod constant;
+mod config;
 
 use std::net::SocketAddr;
 use axum::response::Html;
 use axum::Router;
 use axum::routing::get;
 use tracing::Level;
-use crate::constant::SERVER_ADDR;
+use crate::config::SERVER_ADDR;
 
 #[tokio::main]
 async fn main() {

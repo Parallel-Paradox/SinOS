@@ -1,13 +1,12 @@
-use axum::Json;
-use axum::response::{IntoResponse, Response};
 use nanoid::nanoid;
 use serde::{Serialize, Deserialize};
-use crate::constant::NUM_ALPHABET;
+use crate::config::NUM_ALPHABET;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RoomID(String);
 
 impl RoomID {
+    pub fn new() -> Self { Self::default() }
     pub fn get(&self) -> &str { &self.0 }
 }
 
@@ -17,13 +16,13 @@ impl Default for RoomID {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameRoom {
-    room_id: RoomID,
+    pub room_id: RoomID,
     word_list: Vec<String>,
 }
 
 impl Default for GameRoom {
     fn default() -> Self {
-        Self { room_id: RoomID::default(), word_list: Vec::new(), }
+        Self { room_id: RoomID::new(), word_list: Vec::new(), }
     }
 }
 
