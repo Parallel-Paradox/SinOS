@@ -4,6 +4,11 @@
 //! **DO NOT PUBLIC THEM!**
 
 use mongodb::options::Credential;
+use crate::constant::error::*;
 
-pub const MONGO_CREDENTIAL_ACTION_CODE: Result<Credential, &str> =
-    Err("Mongo account should be set manually.");
+#[allow(dead_code)]
+pub const MONGO_CREDENTIAL_ROOT: Result<Credential, ErrCode> =
+    Err(ERR_MONGO_CREDENTIAL_UNSET);
+
+pub const MONGO_CREDENTIAL_ACTION_CODE: Result<Credential, ErrCode> =
+    Err(ERR_MONGO_CREDENTIAL_UNSET);
