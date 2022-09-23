@@ -29,3 +29,7 @@ impl Display for ErrCode {
         Ok(())
     }
 }
+
+impl From<mongodb::error::Error> for ErrCode {
+    fn from(err: mongodb::error::Error) -> Self { Self::MongoRwError(err) }
+}

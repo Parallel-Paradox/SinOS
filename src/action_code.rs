@@ -7,14 +7,15 @@ use axum::response::IntoResponse;
 pub use game_room::*;
 
 pub fn create_app() -> Router {
-    let mongo_client = Arc::new(create_mongo_client());
+    let db = Arc::new(connect_mongodb());
 
     Router::new()
         .route("/new_game_room", get(new_game_room))
-        .layer(Extension(mongo_client))
+        .route("/test", get(test))
+        .layer(Extension(db))
 }
 
-pub fn create_mongo_client() -> mongodb::Client {
+pub fn connect_mongodb() -> mongodb::Database {
     use mongodb::Client;
     use mongodb::options::{ClientOptions, ServerAddress};
     use crate::config::mongo_credential::action_code;
@@ -27,7 +28,7 @@ pub fn create_mongo_client() -> mongodb::Client {
     }];
     client_option.credential = Some(action_code().unwrap());
 
-    Client::with_options(client_option).unwrap()
+    Client::with_options(client_option).unwrap().database("action_code")
 }
 
 async fn new_game_room() -> impl IntoResponse {
@@ -35,4 +36,8 @@ async fn new_game_room() -> impl IntoResponse {
     println!("{:?}", game_room);
 
     Json(game_room)
+}
+
+async fn test(Extension(db): Extension<Arc<mongodb::Database>>) -> impl IntoResponse {
+    Json(get_random_words(db, 25).await.unwrap())
 }
