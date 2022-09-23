@@ -2,6 +2,8 @@
 
 use std::fmt::Display;
 
+pub type Result<T> = std::result::Result<T, ErrCode>;
+
 #[derive(Debug)]
 pub enum ErrCode {
     /// Mongo account should be set manually.

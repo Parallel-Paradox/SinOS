@@ -4,7 +4,7 @@ use futures::StreamExt;
 use mongodb::{Database, bson::{doc, Document, from_bson}};
 use nanoid::nanoid;
 use serde::{Serialize, Deserialize};
-use crate::config::{NUM_ALPHABET, ErrCode};
+use crate::config::{NUM_ALPHABET, Result};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RoomID(String);
@@ -30,7 +30,7 @@ impl Default for GameRoom {
 }
 
 /// Get 25 random words from the given mongo database.
-pub async fn get_random_words(db: Arc<Database>, size: i32) -> Result<Vec<String>, ErrCode> {
+pub async fn get_random_words(db: Arc<Database>, size: i32) -> Result<Vec<String>> {
     let collections = db.collection::<Document>("words");
 
     let pipeline = vec![
