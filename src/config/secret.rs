@@ -9,10 +9,10 @@ pub mod mongo_credential {
 
     #[allow(dead_code)]
     pub fn root() -> Result<Credential, ErrCode> {
-        Err(ERR_MONGO_CREDENTIAL_UNSET)
+        Err(ErrCode::MongoCredentialUnset)
     }
 
     pub fn action_code() -> Result<Credential, ErrCode> {
-        Err(ERR_MONGO_CREDENTIAL_UNSET)
+        Err(ErrCode::MongoCredentialUnset)
     }
 }
