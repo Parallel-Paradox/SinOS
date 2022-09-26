@@ -7,6 +7,8 @@ use parking_lot::RwLock;
 use serde::{Serialize, Deserialize};
 use crate::config::{NUM_ALPHABET, Result};
 
+use super::player::{Player, Token};
+
 /// Hold [`RwLock`] of the whole map and each entry in this map. Access the write lock of the whole
 /// map only when create or delete a game room.
 #[derive(Debug)]
@@ -14,6 +16,19 @@ pub struct RoomMap(RwLock<HashMap<RoomID, RwLock<GameRoom>>>);
 
 impl RoomMap {
     pub fn new() -> Self { Self::default() }
+    
+    /// Insert an empty game room into map, return a connection [`Token`].
+    pub fn insert_empty(&self) -> Token {
+        let token = Token::new();
+        let owner = Player::new(token.clone());
+        let room = GameRoom::new(owner);
+
+        let mut map = self.0.write();
+        let id = room.room_id;
+        map.insert(id, RwLock::new(room));
+
+        token
+    }
 }
 
 impl Default for RoomMap {
@@ -35,7 +50,7 @@ impl Default for RoomID {
 
 impl Display for RoomID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RoomID({:07})", self.0)
+        write!(f, "{:07}", self.0)
     }
 }
 
@@ -44,16 +59,22 @@ impl PartialEq for RoomID {
 }
 
 
-/// Save the context of a Game room.
+/// Save the context of a Game room. A GameRoom must have a [`Player`] as its owner.
+/// TODO - Player Management.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameRoom {
     pub room_id: RoomID,
+    owner: Player,
     word_list: Option<Vec<String>>,
 }
 
-impl Default for GameRoom {
-    fn default() -> Self {
-        Self { room_id: RoomID::new(), word_list: None, }
+impl GameRoom {
+    pub fn new(owner: Player) -> Self {
+        Self {
+            room_id: owner.token.room_id,
+            owner,
+            word_list: None,
+        }
     }
 }
 

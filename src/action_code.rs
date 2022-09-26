@@ -1,4 +1,5 @@
 mod game_room;
+mod player;
 use std::sync::Arc;
 
 use axum::routing::get;
@@ -35,21 +36,22 @@ pub fn connect_mongodb() -> Database {
     Client::with_options(client_option).unwrap().database("action_code")
 }
 
-/// Create a new [`GameRoom`], return the [`RoomID`].
-async fn new_game_room() -> impl IntoResponse {
+/// Create a new [`GameRoom`], return the connection [`player::Token`].
+async fn new_game_room(
+    Extension(rp): Extension<Arc<RoomMap>>,
+) -> impl IntoResponse {
+    let token = rp.insert_empty();
+    tracing::debug!("Insert an empty game room - {:?}", token);
 
-    // TODO Save this game room into redis.
-    let game_room = GameRoom::default();
-
-    Json(game_room)
+    Json(token)
 }
 
 /// Do some test for unstable API.
 #[cfg(debug_assertions)]
 async fn experiment(
     Extension(db): Extension<Arc<Database>>,
-    Extension(rp): Extension<Arc<RoomMap>>,
 ) -> impl IntoResponse
 {
+    // TODO save words into room
     Json(get_random_words(db, 25).await.unwrap())
 }

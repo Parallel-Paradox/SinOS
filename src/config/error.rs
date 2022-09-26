@@ -26,6 +26,7 @@ impl Display for ErrCode {
         write!(f, "err: {} ", self.get_code())?;
         match &self {
             _ => { /* Ignore the enum that has no content inside */ },
+            // TODO A more accurate error information.
             Self::MongoRwError(err) => { write!(f, "{:?}", err)?; },
         }
         Ok(())
