@@ -17,17 +17,17 @@ pub struct RoomMap(RwLock<HashMap<RoomID, RwLock<GameRoom>>>);
 impl RoomMap {
     pub fn new() -> Self { Self::default() }
     
-    /// Insert an empty game room into map, return a connection [`Token`].
-    pub fn insert_empty(&self) -> Token {
-        let token = Token::new();
-        let owner = Player::new(token.clone());
-        let room = GameRoom::new(owner);
-
+    pub fn insert(&self, room: GameRoom) {
         let mut map = self.0.write();
         let id = room.room_id;
         map.insert(id, RwLock::new(room));
+        tracing::debug!("Insert a game room - id: {}", id);
+    }
 
-        token
+    pub fn remove(&self, id: RoomID) {
+        let mut map = self.0.write();
+        map.remove(&id);
+        tracing::debug!("Remove a game room - id: {}", id);
     }
 }
 
@@ -75,6 +75,17 @@ impl GameRoom {
             owner,
             word_list: None,
         }
+    }
+
+    pub fn get_owner_token(&self) -> Token { self.owner.token.to_owned() }
+}
+
+impl Default for GameRoom {
+    fn default() -> Self {
+        let token = Token::new();
+        let owner = Player::new(token);
+        
+        GameRoom::new(owner)
     }
 }
 
