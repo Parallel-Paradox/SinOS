@@ -1,5 +1,4 @@
 mod game_room;
-mod player;
 use std::sync::Arc;
 
 use axum::extract::WebSocketUpgrade;
@@ -14,8 +13,6 @@ use serde::{Serialize, Deserialize};
 use serde_json::json;
 use crate::config::mongo_credential::action_code;
 pub use game_room::*;
-
-use self::player::Token;
 
 pub fn create_app() -> Router {
     let db = Arc::new(connect_mongodb());
@@ -120,8 +117,8 @@ impl TryFrom<Message> for Command {
 }
 
 /// Create a new [`GameRoom`].
-async fn new_game_room(socket: &mut WebSocket, rp: Arc<RoomMap>) -> Result<Token, ()> {
-    let room = GameRoom::default();
+async fn new_game_room(socket: &mut WebSocket,  rp: Arc<RoomMap>) -> Result<Token, ()> {
+    let room = GameRoom::new(Player::default());    // TODO give a player as param
     let token = room.get_owner_token();
 
     let msg = Message::Text(

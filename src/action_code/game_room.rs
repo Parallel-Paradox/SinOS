@@ -5,9 +5,7 @@ use mongodb::{Database, bson::{doc, Document, from_bson}};
 use nanoid::nanoid;
 use parking_lot::RwLock;
 use serde::{Serialize, Deserialize};
-use crate::config::{NUM_ALPHABET, Result};
-
-use super::player::{Player, Token};
+use crate::util::{NUM_ALPHABET, Result};
 
 /// Hold [`RwLock`] of the whole map and each entry in this map. Access the write lock of the whole
 /// map only when create or delete a game room.
@@ -59,7 +57,9 @@ impl PartialEq for RoomID {
 }
 
 
-/// Save the context of a Game room. A GameRoom must have a [`Player`] as its owner.
+/// Save the context of a Game room. A GameRoom must have a [`Player`] as its owner.  
+/// To create a new game room, you need to create a [`Token`] first, then create a [`Player`], and
+/// finally create a [`super::GameRoom`] with this player as its owner.
 /// TODO - Player Management.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameRoom {
@@ -80,12 +80,39 @@ impl GameRoom {
     pub fn get_owner_token(&self) -> Token { self.owner.token.to_owned() }
 }
 
-impl Default for GameRoom {
+/// The client should have full access to the game resources with its token.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Token {
+    pub player_id: String,
+    pub room_id: RoomID,
+}
+
+impl Token {
+    pub fn new() -> Self { Self::default() }
+}
+
+impl Default for Token {
     fn default() -> Self {
-        let token = Token::new();
-        let owner = Player::new(token);
-        
-        GameRoom::new(owner)
+        Self { player_id: nanoid!(), room_id: RoomID::new() }
+    }
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Player {
+    pub token: Token,
+    pub name: String,
+}
+
+impl Player {
+    pub fn new(token: Token) -> Self {
+        Self { token, name: "Anonymous".to_owned() }
+    }
+}
+
+impl Default for Player {
+    fn default() -> Self {
+        Self { token: Token::default(), name: "Anonymous".to_owned() }
     }
 }
 
