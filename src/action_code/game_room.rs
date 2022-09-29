@@ -1,16 +1,16 @@
-use std::{sync::Arc, collections::HashMap, fmt::Display};
+use std::{sync::Arc, collections::HashMap, fmt::Display, hash::Hash};
 
 use futures::StreamExt;
 use mongodb::{Database, bson::{doc, Document, from_bson}};
 use nanoid::nanoid;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, Mutex};
 use serde::{Serialize, Deserialize};
-use crate::util::{NUM_ALPHABET, Result};
+use crate::util::{NUM_ALPHABET, Result, ErrCode};
 
 /// Hold [`RwLock`] of the whole map and each entry in this map. Access the write lock of the whole
 /// map only when create or delete a game room.
 #[derive(Debug)]
-pub struct RoomMap(RwLock<HashMap<RoomID, RwLock<GameRoom>>>);
+pub struct RoomMap(RwLock<HashMap<RoomID, Mutex<GameRoom>>>);
 
 impl RoomMap {
     pub fn new() -> Self { Self::default() }
@@ -18,7 +18,7 @@ impl RoomMap {
     pub fn insert(&self, room: GameRoom) {
         let mut map = self.0.write();
         let id = room.room_id;
-        map.insert(id, RwLock::new(room));
+        map.insert(id, Mutex::new(room));
         tracing::debug!("Insert a game room - id: {}", id);
     }
 
@@ -26,6 +26,30 @@ impl RoomMap {
         let mut map = self.0.write();
         map.remove(&id);
         tracing::debug!("Remove a game room - id: {}", id);
+    }
+
+    pub fn insert_player(&self, id: RoomID, player: Player) -> Result<()> {
+        let map = self.0.read();
+        let mut room = match map.get(&id) {
+            Some(_room) => _room,
+            None => { return Err(ErrCode::ObjectNotExist); },
+        }.lock();
+        room.player_list.insert(player.token.player_id.clone(), player);
+
+        Ok(())
+    }
+
+    pub fn remove_player(&self, id: RoomID, player_id: String) -> Result<()> {
+        let map = self.0.read();
+        let mut room = match map.get(&id) {
+            Some(_room) => _room,
+            None => { return Err(ErrCode::ObjectNotExist); },
+        }.lock();
+
+        match room.player_list.remove(&player_id) {
+            Some(_) => Ok(()),
+            None => Err(ErrCode::ObjectNotExist),
+        }
     }
 }
 
@@ -64,7 +88,8 @@ impl PartialEq for RoomID {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameRoom {
     pub room_id: RoomID,
-    owner: Player,
+    owner_id: String,
+    player_list: HashMap<String, Player>,
     word_list: Option<Vec<String>>,
 }
 
@@ -72,12 +97,11 @@ impl GameRoom {
     pub fn new(owner: Player) -> Self {
         Self {
             room_id: owner.token.room_id,
-            owner,
+            owner_id: owner.token.player_id.clone(),
+            player_list: HashMap::new(),
             word_list: None,
         }
     }
-
-    pub fn get_owner_token(&self) -> Token { self.owner.token.to_owned() }
 }
 
 /// The client should have full access to the game resources with its token.
@@ -85,10 +109,6 @@ impl GameRoom {
 pub struct Token {
     pub player_id: String,
     pub room_id: RoomID,
-}
-
-impl Token {
-    pub fn new() -> Self { Self::default() }
 }
 
 impl Default for Token {
@@ -105,8 +125,11 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(token: Token) -> Self {
-        Self { token, name: "Anonymous".to_owned() }
+    pub fn new(room_id: RoomID, name: String) -> Self {
+        Self {
+            token: Token { player_id: nanoid!(), room_id },
+            name,
+        }
     }
 }
 

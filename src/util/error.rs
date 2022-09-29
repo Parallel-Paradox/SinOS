@@ -10,6 +10,7 @@ pub enum ErrCode {
     MongoCredentialUnset,
     /// Mongo read write error, See [`mongodb::error::Error`]
     MongoRwError(mongodb::error::Error),
+    ObjectNotExist,
 }
 
 impl ErrCode {
@@ -17,6 +18,7 @@ impl ErrCode {
         match &self {
             Self::MongoCredentialUnset => 120,
             Self::MongoRwError(_) => 121,
+            Self::ObjectNotExist => 122,
         }
     }
 }

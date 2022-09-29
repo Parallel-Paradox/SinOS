@@ -57,7 +57,7 @@ async fn connect_ws(
 async fn connection_loop(mut socket: WebSocket, sid: String, rp: Arc<RoomMap>, db: Arc<Database>)
 {
     // ----- Connection Status -----
-    let mut _token: Token;
+    let mut _token: Option<Token>;
 
     while let Some(msg) = socket.recv().await {
         let cmd: Command;
@@ -73,21 +73,41 @@ async fn connection_loop(mut socket: WebSocket, sid: String, rp: Arc<RoomMap>, d
 
         match cmd {
             Command::Close => { break; },
-            Command::NewGameRoom => {
-                _token = match new_game_room(&mut socket, rp.clone()).await {
+            Command::NewRoom { owner_name } => {
+                let token = match new_room(&mut socket, owner_name, rp.clone()).await {
                     Ok(token) => token,
                     Err(_) => { continue; }
                 };
-            }
+                _token = Some(token);
+            },
+            Command::EnterRoom { room_id, player_name, } => {
+                let token = match enter_room(
+                    &mut socket, room_id, player_name, rp.clone()).await
+                {
+                    Ok(token) => token,
+                    Err(_) => { continue; }
+                };
+                _token = Some(token);
+            },
+            Command::StartGame => {
+                // TODO Start Game
+            },
         }
     }
+
+    // TODO Exit room when disconnected, remove the room when last user exit this room.
+
     tracing::debug!("Sid-{}- connection closed.", sid);
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 enum Command {
     Close,
-    NewGameRoom,
+    NewRoom { owner_name: String },
+    EnterRoom { room_id: RoomID, player_name: String, },  // Auto leave when disconnected.
+
+    // Only available for the owner of game room
+    StartGame,
 }
 
 /// See [Structs and enums in JSON](https://serde.rs/json.html)
@@ -116,18 +136,49 @@ impl TryFrom<Message> for Command {
     }
 }
 
-/// Create a new [`GameRoom`].
-async fn new_game_room(socket: &mut WebSocket,  rp: Arc<RoomMap>) -> Result<Token, ()> {
-    let room = GameRoom::new(Player::default());    // TODO give a player as param
-    let token = room.get_owner_token();
+async fn new_room(socket: &mut WebSocket, owner_name: String, rp: Arc<RoomMap>)
+    -> Result<Token, ()>
+{
+    let owner = Player::new(RoomID::new(), owner_name);
+    let token = owner.token.clone();
+    let room = GameRoom::new(owner);
+
+    // Make sure that game room has been inserted before notice the client. If fail to notice,
+    // convert the operation.
+    rp.insert(room);
 
     let msg = Message::Text(
         format!( "{}", json!(token.clone()) )
     );
-
-    rp.insert(room);
     if socket.send(msg).await.is_err() {
         rp.remove(token.room_id);
+        return Err(());
+    }
+
+    Ok(token)
+}
+
+async fn enter_room(socket: &mut WebSocket, room_id: RoomID, player_name: String, rp: Arc<RoomMap>)
+    -> Result<Token, ()>
+{
+    let player = Player::new(room_id, player_name);
+    let token = player.token.clone();
+
+    if let Some(err) = rp.insert_player(room_id, player).err() {
+        tracing::error!("New Player insert fail {:?}.", token.clone());
+        let msg = Message::Text(
+            format!("{} - Object not found.", err)
+        );
+        if let Err(err) = socket.send(msg).await {
+            tracing::error!("Fail to send msg: {}", err);
+        }
+    }
+
+    let msg = Message::Text(
+        format!( "{}", json!(token.clone()) )
+    );
+    if socket.send(msg).await.is_err() {
+        rp.remove_player(room_id, token.player_id).unwrap();
         return Err(());
     }
 
