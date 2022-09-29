@@ -60,7 +60,7 @@ security:
   authorization: "enabled"
 ```
 
-Set the connect uri in `/sh/create_word_list.js`, do `load(${Path_to_create_word_list.js})` in 
+Set the connect uri in `/job/create_word_list.js`, do `load(${Path_to_create_word_list.js})` in 
 mongosh, the word list should be inserted into db automatically.
 
 ### Debug build

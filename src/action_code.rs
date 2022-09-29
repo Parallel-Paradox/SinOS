@@ -104,7 +104,7 @@ impl TryFrom<Message> for Command {
             Message::Text(src) => {
                 let res = serde_json::from_str(&src);
                 if res.is_err() {
-                    tracing::error!("Parse fail!");
+                    tracing::error!("Parse fail! - {}", src);
                     return Err(());
                 }
                 cmd = res.unwrap();
