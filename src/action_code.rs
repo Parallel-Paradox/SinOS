@@ -57,7 +57,7 @@ async fn connect_ws(
 async fn connection_loop(mut socket: WebSocket, sid: String, rp: Arc<RoomMap>, db: Arc<Database>)
 {
     // ----- Connection Status -----
-    let mut _token: Option<Token>;
+    let mut _token: Option<Token> = None;
 
     while let Some(msg) = socket.recv().await {
         let cmd: Command;
@@ -95,7 +95,9 @@ async fn connection_loop(mut socket: WebSocket, sid: String, rp: Arc<RoomMap>, d
         }
     }
 
-    // TODO Exit room when disconnected, remove the room when last user exit this room.
+    if let Some(token) = _token {
+        rp.remove_player(token.room_id, token.player_id).unwrap();
+    }
 
     tracing::debug!("Sid-{}- connection closed.", sid);
 }

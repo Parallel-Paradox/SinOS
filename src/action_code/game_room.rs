@@ -18,14 +18,14 @@ impl RoomMap {
     pub fn insert(&self, room: GameRoom) {
         let mut map = self.0.write();
         let id = room.room_id;
+        tracing::debug!("Insert a game room - id: {}, owned by player {}.", id, &room.owner_id);
         map.insert(id, Mutex::new(room));
-        tracing::debug!("Insert a game room - id: {}", id);
     }
 
     pub fn remove(&self, id: RoomID) {
         let mut map = self.0.write();
         map.remove(&id);
-        tracing::debug!("Remove a game room - id: {}", id);
+        tracing::debug!("Remove a game room - id: {}.", id);
     }
 
     pub fn insert_player(&self, id: RoomID, player: Player) -> Result<()> {
@@ -34,7 +34,10 @@ impl RoomMap {
             Some(_room) => _room,
             None => { return Err(ErrCode::ObjectNotExist); },
         }.lock();
-        room.player_list.insert(player.token.player_id.clone(), player);
+
+        let player_id = player.token.player_id.clone();
+        tracing::debug!("Player {} enter room {}.", player_id, id);
+        room.player_list.insert(player_id, player);
 
         Ok(())
     }
@@ -46,10 +49,24 @@ impl RoomMap {
             None => { return Err(ErrCode::ObjectNotExist); },
         }.lock();
 
-        match room.player_list.remove(&player_id) {
-            Some(_) => Ok(()),
-            None => Err(ErrCode::ObjectNotExist),
+        tracing::debug!("Player {} leave room {}.", player_id, id);
+        if room.player_list.remove(&player_id).is_none() {
+            return Err(ErrCode::ObjectNotExist);
+        };
+
+        if room.player_list.len() == 0 {
+            drop(room);
+            drop(map);
+            self.remove(id);
+            return Ok(());
         }
+
+        if player_id == room.owner_id {
+            let (new_owner_id, _) = room.player_list.iter().next().unwrap();
+            room.owner_id = new_owner_id.to_owned();
+        }
+
+        Ok(())
     }
 }
 
@@ -95,12 +112,11 @@ pub struct GameRoom {
 
 impl GameRoom {
     pub fn new(owner: Player) -> Self {
-        Self {
-            room_id: owner.token.room_id,
-            owner_id: owner.token.player_id.clone(),
-            player_list: HashMap::new(),
-            word_list: None,
-        }
+        let room_id = owner.token.room_id;
+        let owner_id = owner.token.player_id.clone();
+        let player_list = [(owner_id.clone(), owner)].iter().cloned().collect();
+
+        Self { room_id, owner_id, player_list, word_list: None }
     }
 }
 
@@ -118,7 +134,7 @@ impl Default for Token {
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
     pub token: Token,
     pub name: String,
